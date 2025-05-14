@@ -66,7 +66,7 @@ class Model(pl.LightningModule):
                 return encoder_loss + self.beta * recon_loss
             else:
                 return encoder_loss
-            
+
 
 """ Datamodule """
 
@@ -125,17 +125,29 @@ class PUMAP():
         self.num_workers = num_workers
         self.num_gpus = num_gpus
         self.match_nonparametric_umap = match_nonparametric_umap
-        
+
     def fit(self, X):
-        trainer = pl.Trainer(accelerator='gpu', devices=1, max_epochs=self.epochs)
+        # Determine the correct accelerator
+        if torch.backends.mps.is_available():
+            accelerator = "mps"
+            devices = 1
+        elif torch.cuda.is_available():  # Fallback for CUDA if needed elsewhere
+            accelerator = "gpu"
+            devices = 1
+        else:
+            accelerator = "cpu"
+            devices = "auto"  # Or 1 if you prefer
+
+        print(f"Using accelerator: {accelerator}")  # Good for debugging
+
+        trainer = pl.Trainer(accelerator=accelerator, devices=devices, max_epochs=self.epochs)
         encoder = default_encoder(X.shape[1:], self.n_components) if self.encoder is None else self.encoder
-        
+
         if self.decoder is None or isinstance(self.decoder, nn.Module):
             decoder = self.decoder
         elif self.decoder == True:
             decoder = default_decoder(X.shape[1:], self.n_components)
-            
-            
+
         if not self.match_nonparametric_umap:
             self.model = Model(self.lr, encoder, decoder, beta=self.beta, min_dist=self.min_dist, reconstruction_loss=self.reconstruction_loss)
             graph = get_umap_graph(X, n_neighbors=self.n_neighbors, metric=self.metric, random_state=self.random_state)
@@ -153,21 +165,21 @@ class PUMAP():
                 model=self.model,
                 datamodule=Datamodule(MatchDataset(X, non_parametric_embeddings), self.batch_size, self.num_workers)
             )
-        
+
     @torch.no_grad()
     def transform(self, X):
         print(f"Reducing array of shape {X.shape} to ({X.shape[0]}, {self.n_components})")
         return self.model.encoder(X).detach().cpu().numpy()
-    
+
     @torch.no_grad()
     def inverse_transform(self, Z):
         return self.model.decoder(Z).detach().cpu().numpy()
-    
+
     def save(self, path):
         with open(path, 'wb') as oup:
             dill.dump(self, oup)
         print(f"Pickled PUMAP object at {path}")
-        
+
 def load_pumap(path): 
     print("Loading PUMAP object from pickled file.")
     with open(path, 'rb') as inp: return dill.load(inp)
