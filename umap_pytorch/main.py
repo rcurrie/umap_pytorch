@@ -131,14 +131,18 @@ class PUMAP():
         if torch.backends.mps.is_available():
             accelerator = "mps"
             devices = 1
-        elif torch.cuda.is_available():  # Fallback for CUDA if needed elsewhere
+            # MPS doesn't support multiprocessing, so force num_workers to 0
+            num_workers = 0
+        elif torch.cuda.is_available():
             accelerator = "gpu"
             devices = 1
+            num_workers = self.num_workers
         else:
             accelerator = "cpu"
-            devices = "auto"  # Or 1 if you prefer
+            devices = 1  # Changed from "auto" to 1
+            num_workers = self.num_workers
 
-        print(f"Using accelerator: {accelerator}")  # Good for debugging
+        print(f"Using accelerator: {accelerator}")
 
         trainer = pl.Trainer(accelerator=accelerator, devices=devices, max_epochs=self.epochs)
         encoder = default_encoder(X.shape[1:], self.n_components) if self.encoder is None else self.encoder
@@ -153,7 +157,7 @@ class PUMAP():
             graph = get_umap_graph(X, n_neighbors=self.n_neighbors, metric=self.metric, random_state=self.random_state)
             trainer.fit(
                 model=self.model,
-                datamodule=Datamodule(UMAPDataset(X, graph), self.batch_size, self.num_workers)
+                datamodule=Datamodule(UMAPDataset(X, graph), self.batch_size, num_workers)
                 )
         else:
             print("Fitting Non parametric Umap")
@@ -163,7 +167,7 @@ class PUMAP():
             print("Training NN to match embeddings")
             trainer.fit(
                 model=self.model,
-                datamodule=Datamodule(MatchDataset(X, non_parametric_embeddings), self.batch_size, self.num_workers)
+                datamodule=Datamodule(MatchDataset(X, non_parametric_embeddings), self.batch_size, num_workers)
             )
 
     @torch.no_grad()
