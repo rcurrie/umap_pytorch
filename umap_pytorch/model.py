@@ -49,7 +49,7 @@ class default_encoder(nn.Module):
         super().__init__()
         self.encoder = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(np.product(dims), 200),
+            nn.Linear(np.prod(dims), 200),
             nn.ReLU(),
             nn.Linear(200, 200),
             nn.ReLU(),
@@ -75,7 +75,7 @@ class default_decoder(nn.Module):
             nn.ReLU(),
             nn.Linear(200, 200),
             nn.ReLU(),
-            nn.Linear(200, np.product(dims)),
+            nn.Linear(200, np.prod(dims)),
         ).to(
             device
         )  # Changed .cuda()
